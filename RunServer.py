@@ -43,7 +43,9 @@ if bool_is_in_terminal_mode:
 int_max_byte_size = 16
 
 # 4615 IS RESERVED FOR PUSH IID GATE WITH CRYPTO HANDSHAKE
-server_websocket_port = 4616
+server_websocket_port = 4615
+# 4625 IS RESERVED FOR PUSH IID GATE WITH TRUSTED
+server_websocket_port = 4625
 server_websocket_mask= "0.0.0.0"
 
  
