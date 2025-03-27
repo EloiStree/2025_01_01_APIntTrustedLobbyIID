@@ -5,7 +5,5 @@ You can find here  Websocket IID server that just take value and broadcast it to
 
 
 ```
-
-git clone /git/apint_trusted_lobby_iid
-
+git clone https://github.com/EloiStree/2025_01_01_APIntTrustedLobbyIID.git /git/apint_trusted_lobby_iid
 ```
