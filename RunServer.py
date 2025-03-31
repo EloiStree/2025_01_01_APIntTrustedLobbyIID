@@ -26,16 +26,16 @@ bool_is_in_terminal_mode= sys.stdout.isatty()
 if bool_is_in_terminal_mode:
     print("Running in a terminal.")
     stop_service_script ="""
-    sudo systemctl stop apint_trusted_lobby_iid.service
-    sudo systemctl stop apint_trusted_lobby_iid.timer
+    sudo systemctl stop apint_trusted_push_iid.service
+    sudo systemctl stop apint_trusted_push_iid.timer
     """
     # run code to stop current service
     os.system(stop_service_script)
     
     # WHEN YOU NEED TO RESTART IT.
     """
-    sudo systemctl restart apint_trusted_lobby_iid.service
-    sudo systemctl restart apint_trusted_lobby_iid.timer
+    sudo systemctl restart apint_trusted_push_iid.service
+    sudo systemctl restart apint_trusted_push_iid.timer
     """
 
 
