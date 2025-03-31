@@ -61,3 +61,15 @@ sudo systemctl restart apint_trusted_push_iid.timer
 sudo systemctl status apint_trusted_push_iid.service
 sudo systemctl status apint_trusted_push_iid.timer
 ```
+
+
+```
+pip install requests tornado --break-system-packages
+```
+
+```
+
+sudo systemctl stop apint_trusted_push_iid.service
+sudo systemctl stop apint_trusted_push_iid.timer
+python /git/apint_trusted_push_iid/RunServer.py
+```
