@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Trusted Lobby IID</title>
+</head>
+<body>
+    
+    <script>
+
+        // GLOBAL VARIABLE
+        var  socket=null;
+        var  integerToSyncOffset=2501;
+        var  timeWhenSentInPage;
+        var  timeWhenReceivedInPage;
+        var  timeOnServerWhenReceived;
+
+     
+      function run_when_page_loaded(){
+        var offsetInMilliseconds = 0;
+        serverApint = "ws://raspberrypi.local:4625";
+        var urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('server')) {
+            serverApint = urlParams.get('server');
+        }
+
+        socket = new WebSocket(serverApint);
+        var debugConsole = document.getElementById("debugConsole");
+        document.getElementById("ReceivedIID_Websocket").innerText = `Websocket: ${serverApint}`;
+       
+        socket.onopen = function(event) {
+            console.log("WebSocket connection established.");
+          };
+
+        socket.onmessage = function(event) {
+            console.log("Message received from server:", event.data);
+           
+            try {
+                var message = event.data;
+                if (event.data instanceof Blob) {
+                    event.data.arrayBuffer().then(buffer => {
+                        console.log("Received binary message as Blob:", buffer);
+                        if (buffer.byteLength === 16) {
+                            var view = new DataView(buffer);
+                            var index = view.getInt32(0, true); // Little-endian
+                            var value = view.getInt32(4, true); // Little-endian
+                            var timestamp = BigInt(view.getUint32(8, true)) | (BigInt(view.getUint32(12, true)) << 32n);
+                            var timestamp_milliseconds_utc_now = Number(timestamp);
+                            if (value === integerToSyncOffset) {
+                                timeWhenReceivedInPage = Date.now();
+                                timeOnServerWhenReceived = timestamp_milliseconds_utc_now;
+                                
+                                var ping = timeWhenReceivedInPage - timeWhenSentInPage;
+                                
+                                console.log("Ping:", ping);
+                                if(ping<1000){
+
+                                    var halfPing = ping / 2;
+                                    var supposeTimeOnServerWhenSent = timeOnServerWhenReceived - halfPing;
+                                    var offset = supposeTimeOnServerWhenSent - timeWhenSentInPage;
+                                    offsetInMilliseconds = offset;
+                                    document.getElementById("ReceivedIID_NTPOffset").innerText = `Offset: ${offsetInMilliseconds} ms`;
+                                    document.getElementById("ReceivedIID_Ping").innerText = `Ping: ${ping} ms`;
+                                }
+                            }
+                            else{
+                                ping = ((Date.now()+offsetInMilliseconds)-timestamp_milliseconds_utc_now )*2;
+                                document.getElementById("ReceivedIID_Ping").innerText = `Ping: ${ping} ms`;
+                            }
+                            document.getElementById("ReceivedIID_Index").innerText = `Index: ${index}`;
+                            document.getElementById("ReceivedIID_Value").innerText = `Value: ${value}`;
+                            document.getElementById("ReceivedIID_Date").innerText = `Date: ${timestamp_milliseconds_utc_now}`;
+                            var currentTimestampUTCInMilliseconds = Date.now();
+                            var serverTime = currentTimestampUTCInMilliseconds + offsetInMilliseconds;
+                            document.getElementById("ReceivedIID_Timestamp").innerText = `Time: ${currentTimestampUTCInMilliseconds} Time NTP: ${serverTime}`;
+                         } 
+                    }).catch(error => {
+                        console.error("Error reading Blob:", error);
+                    });
+                }
+            } catch (error) {
+                console.error("Error parsing message:", error);
+            }
+        };
+
+        socket.onclose = function(event) {
+            console.log("WebSocket connection closed.");
+        };
+
+        socket.onerror = function(error) {
+            console.error("WebSocket error:", error);
+        };
+        }
+        function sendInteger(integer) {
+            if (integer === integerToSyncOffset){
+                timeWhenSentInPage = Date.now();
+            }
+            if (socket!=null && socket.readyState === WebSocket.OPEN) {
+                //convert integer to bytes little endian
+                var message = new Uint8Array(4);
+                message[0] = integer & 0xFF;
+                message[1] = (integer >> 8) & 0xFF;
+                message[2] = (integer >> 16) & 0xFF;
+                message[3] = (integer >> 24) & 0xFF;
+
+                socket.send(message);
+            } 
+        }
+
+
+        document.addEventListener("DOMContentLoaded", function () {
+            
+        const buttons = document.querySelectorAll("button[data-value]");
+        
+        buttons.forEach(button => {
+            button.addEventListener("click", function () {
+                const value = parseInt(button.getAttribute("data-value"), 10);
+                var valueAsInt = parseInt(value);
+                console.log("Sending integer:", valueAsInt);
+                sendInteger(value);
+            });
+        });
+    });
+
+        setInterval(() => {
+            if (!socket || socket.readyState === WebSocket.CLOSED) {
+                console.log("WebSocket is closed. Restarting connection...");
+                run_when_page_loaded();
+            }
+        }, 5000); // Check every 5 seconds
+
+    </script>
+    <div>
+
+<p id="HelloValidation">Hello Trusted APInt connection</p>
+<p id="ReceivedIID_Websocket"       >Websocket</p>
+<p id="ReceivedIID_Index">Index</p>
+<p id="ReceivedIID_Value">Value</p>
+<p id="ReceivedIID_Date">Date</p>
+<p id="ReceivedIID_Timestamp">Time</p>
+<p id="ReceivedIID_NTPOffset">Offset</p>
+<p id="ReceivedIID_Ping">Ping</p>
+
+
+    <div>
+        <button data-value="0">Send 0</button>
+        <button data-value="1">Send 1</button>
+        <button onclick="sendInteger(Math.floor(Math.random() * 10))">Send Random (0-9)</button>
+        <button onclick="sendInteger(Math.floor(Math.random() * 100))">Send Random (0-99)</button>
+        <button onclick="sendInteger(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))">Send Random Integer</button>
+        <button onclick="sendInteger(integerToSyncOffset)">Sync Offset</button>
+    </div>
+
+    <div><br/>
+        <button data-value="101">Start 101</button>
+        <button data-value="201">Stop 201</button><br/>
+        <button data-value="301">Selection Menu 301</button><br/>
+        <button data-value="102">Shield on 102</button>
+        <button data-value="202">Shield off 202</button>
+        <button data-value="103">Alarm on 103</button>
+        <button data-value="203">Alarm off 203</button>
+        <button data-value="104">Air Leak on 104</button>
+        <button data-value="204">Air Leak off 204</button><br/>
+        <button data-value="305">Big Asteroid hit 305</button>
+        <button data-value="205">Big Asteroid hit 205</button>
+        <button data-value="105">Big Asteroid hit 105</button><br/>
+        <button data-value="306">Pipe Break hit 306</button>
+        <button data-value="307">Motor in Fire hit 307</button><br/>
+
+        
+        <br/>
+        <button data-value="108">Light On 108</button>
+        <button data-value="208">Light Off 208</button>
+        <button data-value="308">Light Switch 308</button>
+                
+        <br/>
+        <!-- Color Controls -->
+        <button data-value="700">Color Red</button>
+        <button data-value="701">Color Green</button>
+        <button data-value="702">Color Blue</button>
+        <button data-value="703">Color Orange</button>
+        <button data-value="704">Color Yellow</button>
+        <button data-value="705">Color Purple</button>
+        <button data-value="706">Color Pink</button>
+        <button data-value="707">Color Cyan</button>
+        <button data-value="708">Color White</button>
+        <br/>
+        
+        <br/>
+        <button data-value="7">Gandalf Sax 7</button>
+        <button data-value="404">Rick Roll 404</button>
+        <button data-value="400">Wololo 400</button><br/>
+        <br/>
+        <br/>
+        <button data-value="501">Mission 1 Complete</button>
+        <button data-value="502">Mission 2 Complete</button>
+        <button data-value="503">Mission 3 Complete</button>
+        <button data-value="504">Mission 4 Complete</button>
+        <button data-value="505">Mission 5 Complete</button>
+
+        <br/>
+        <button data-value="601">Set Game Time to 1 minutes</button>
+        <button data-value="602">Set Game Time to 2 minutes</button>
+        <button data-value="603">Set Game Time to 3 minutes</button>
+        <button data-value="604">Set Game Time to 4 minutes</button>
+        <button data-value="605">Set Game Time to 5 minutes</button>
+        <button data-value="610">Set Game Time to 10 minutes</button>
+    
+
+            <br/>
+        <!-- Color Intensity Controls -->
+        <button data-value="710">Color Intensity 0%</button>
+        <button data-value="711">Color Intensity 10%</button>
+        <button data-value="712">Color Intensity 20%</button>
+        <button data-value="713">Color Intensity 30%</button>
+        <button data-value="714">Color Intensity 40%</button>
+        <button data-value="715">Color Intensity 50%</button>
+        <button data-value="716">Color Intensity 60%</button>
+        <button data-value="717">Color Intensity 70%</button>
+        <button data-value="718">Color Intensity 80%</button>
+        <button data-value="719">Color Intensity 90%</button>
+        <button data-value="720">Color Intensity 100%</button>
+                </div>
+
+        <h1>Test</h1>
+        
+       <div id="GRID">
+       <button class="GRIDBUTTON"  data-value="20001" title="">✅ Approval & Completion (20001)</button>
+        <button class="GRIDBUTTON" data-value="20002" title="">✅ Task done / Agreement (20002)</button>
+        <button class="GRIDBUTTON" data-value="20003" title="">✔ Checked & confirmed (20003)</button>
+        <button class="GRIDBUTTON" data-value="20004" title="">🆗 Okay, got it (20004)</button>
+        <button class="GRIDBUTTON" data-value="20005" title="">👍 Approval / Acknowledgment (20005)</button>
+        <button class="GRIDBUTTON" data-value="20006" title="">👏 Appreciation / Well done! (20006)</button>
+        <button class="GRIDBUTTON" data-value="20007" title="">🎉 Celebration / Success (20007)</button>
+        <button class="GRIDBUTTON" data-value="20008" title="">⏳ Time & Urgency (20008)</button>
+        <button class="GRIDBUTTON" data-value="20009" title="">⏳ Work in progress (20009)</button>
+        <button class="GRIDBUTTON" data-value="20010" title="">⏰ Deadline approaching (20010)</button>
+        <button class="GRIDBUTTON" data-value="20011" title="">⚡ Urgent / High priority (20011)</button>
+        <button class="GRIDBUTTON" data-value="20012" title="">🔥 Critical / Important issue (20012)</button>
+        <button class="GRIDBUTTON" data-value="20013" title="">🚀 Progress & Motivation (20013)</button>
+        <button class="GRIDBUTTON" data-value="20014" title="">🚀 Big launch / Moving fast (20014)</button>
+        <button class="GRIDBUTTON" data-value="20015" title="">🎯 Target achieved (20015)</button>
+        <button class="GRIDBUTTON" data-value="20016" title="">💡 Ideas & Discussions (20016)</button>
+        <button class="GRIDBUTTON" data-value="20017" title="">🤔 Thinking / Considering options (20017)</button>
+        <button class="GRIDBUTTON" data-value="20018" title="">❓ Question / Clarification needed (20018)</button>
+        <button class="GRIDBUTTON" data-value="20019" title="">🤝 Collaboration / Teamwork (20019)</button>
+        <button class="GRIDBUTTON" data-value="20020" title="">🔧 Tech & Fixes (20020)</button>
+        <button class="GRIDBUTTON" data-value="20021" title="">🛠 Fixing / Maintenance (20021)</button>
+        <button class="GRIDBUTTON" data-value="20022" title="">🐛 Bug detected (20022)</button>
+        <button class="GRIDBUTTON" data-value="20023" title="">🚧 Work in progress / Under construction (20023)</button>
+        <button class="GRIDBUTTON" data-value="20024" title="">🚨 Warnings & Issues (20024)</button>
+        <button class="GRIDBUTTON" data-value="20025" title="">⚠ Caution / Attention needed (20025)</button>
+        <button class="GRIDBUTTON" data-value="20026" title="">🛑 Stop / Blocker (20026)</button>
+        <button class="GRIDBUTTON" data-value="20027" title="">🔍 Review needed / Investigate (20027)</button>
+        <button class="GRIDBUTTON" data-value="20028" title="">💬 Communication & Engagement (20028)</button>
+        <button class="GRIDBUTTON" data-value="20029" title="">📢 Announcement (20029)</button>
+        <button class="GRIDBUTTON" data-value="20030" title="">🔔 Reminder / Notification (20030)</button>
+        <button class="GRIDBUTTON" data-value="20031" title="">📌 Important note (20031)</button>
+        <button class="GRIDBUTTON" data-value="20032" title="">💪 Keep going! (20032)</button>
+        <button class="GRIDBUTTON" data-value="20033" title="">💥 Unexpected issue (20033)</button>
+        <button class="GRIDBUTTON" data-value="20034" title="">⚡ Powering through (20034)</button>
+        <button class="GRIDBUTTON" data-value="20035" title="">📦 Package received/shipped (20035)</button>
+        <button class="GRIDBUTTON" data-value="20036" title="">☕ Break time / Coffee chat (20036)</button>
+        <button class="GRIDBUTTON" data-value="20037" title="">🍕 Team treat / Celebration (20037)</button>
+        <button class="GRIDBUTTON" data-value="20038" title="">📝 Taking notes (20038)</button>
+        <button class="GRIDBUTTON" data-value="20039" title="">👀 Checking on something (20039)</button>
+        <button class="GRIDBUTTON" data-value="20040" title="">🤷 Not sure / Need more info (20040)</button>
+        <button class="GRIDBUTTON" data-value="20041" title="">🚨 Emergency / Immediate action needed (20041)</button>
+        <button class="GRIDBUTTON" data-value="20042" title="">🙌 Great job / Excitement (20042)</button>
+        <button class="GRIDBUTTON" data-value="20043" title="">🤝 Agreed / Deal (20043)</button>
+        <button class="GRIDBUTTON" data-value="20044" title="">🚧 Work in progress / Temporary issue (20044)</button>
+        <button class="GRIDBUTTON" data-value="20045" title="">🤔 Needs review (20045)</button>
+        <button class="GRIDBUTTON" data-value="20046" title="">💾 Saving files / Backup (20046)</button>
+        <button class="GRIDBUTTON" data-value="20047" title="">🍻 Cheers! / Team celebration (20047)</button>
+        <button class="GRIDBUTTON" data-value="20048" title="">🍺 Casual drinks / Happy hour (20048)</button>
+        <button class="GRIDBUTTON" data-value="20049" title="">🔥 Critical issue (20049)</button>
+        <button class="GRIDBUTTON" data-value="20050" title="">⏰ Deadline approaching (20050)</button>
+        <button class="GRIDBUTTON" data-value="20051" title="">😂 That was funny! (20051)</button>
+        <button class="GRIDBUTTON" data-value="20052" title="">📌 Important! Please check (20052)</button>
+        <button class="GRIDBUTTON" data-value="20053" title="">👉 Point to note (20053)</button>
+        <button class="GRIDBUTTON" data-value="20054" title="">🔵 (Blue) Can you make this blue? (20054)</button>
+        <button class="GRIDBUTTON" data-value="20055" title="">🔴 (Red) Please highlight this in red! (20055)</button>
+        <button class="GRIDBUTTON" data-value="20056" title="">🟢 (Green) Can we use green for this section? (20056)</button>
+        <button class="GRIDBUTTON" data-value="20057" title="">🟡 (Yellow) Mark this in yellow for visibility (20057)</button>
+        <button class="GRIDBUTTON" data-value="20058" title="">🟣 (Purple) Let’s test this color variation (20058)</button>
+        <button class="GRIDBUTTON" data-value="20059" title="">⚫ (Black) Can you darken the text? (20059)</button>
+        <button class="GRIDBUTTON" data-value="20060" title="">⚪ (White) Add a white background here (20060)</button>
+        <button class="GRIDBUTTON" data-value="20061" title="">🎨 Design & Creativity (20061)</button>
+        </div>
+        <div id="LINEARRAY">
+      <div class="LINEBUTTONDIV">  <button data-value="20001" title="">✅ Approval & Completion (20001)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20002" title="">✅ Task done / Agreement (20002)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20003" title="">✔ Checked & confirmed (20003)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20004" title="">🆗 Okay, got it (20004)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20005" title="">👍 Approval / Acknowledgment (20005)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20006" title="">👏 Appreciation / Well done! (20006)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20007" title="">🎉 Celebration / Success (20007)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20008" title="">⏳ Time & Urgency (20008)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20009" title="">⏳ Work in progress (20009)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20010" title="">⏰ Deadline approaching (20010)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20011" title="">⚡ Urgent / High priority (20011)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20012" title="">🔥 Critical / Important issue (20012)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20013" title="">🚀 Progress & Motivation (20013)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20014" title="">🚀 Big launch / Moving fast (20014)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20015" title="">🎯 Target achieved (20015)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20016" title="">💡 Ideas & Discussions (20016)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20017" title="">🤔 Thinking / Considering options (20017)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20018" title="">❓ Question / Clarification needed (20018)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20019" title="">🤝 Collaboration / Teamwork (20019)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20020" title="">🔧 Tech & Fixes (20020)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20021" title="">🛠 Fixing / Maintenance (20021)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20022" title="">🐛 Bug detected (20022)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20023" title="">🚧 Work in progress / Under construction (20023)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20024" title="">🚨 Warnings & Issues (20024)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20025" title="">⚠ Caution / Attention needed (20025)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20026" title="">🛑 Stop / Blocker (20026)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20027" title="">🔍 Review needed / Investigate (20027)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20028" title="">💬 Communication & Engagement (20028)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20029" title="">📢 Announcement (20029)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20030" title="">🔔 Reminder / Notification (20030)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20031" title="">📌 Important note (20031)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20032" title="">💪 Keep going! (20032)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20033" title="">💥 Unexpected issue (20033)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20034" title="">⚡ Powering through (20034)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20035" title="">📦 Package received/shipped (20035)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20036" title="">☕ Break time / Coffee chat (20036)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20037" title="">🍕 Team treat / Celebration (20037)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20038" title="">📝 Taking notes (20038)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20039" title="">👀 Checking on something (20039)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20040" title="">🤷 Not sure / Need more info (20040)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20041" title="">🚨 Emergency / Immediate action needed (20041)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20042" title="">🙌 Great job / Excitement (20042)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20043" title="">🤝 Agreed / Deal (20043)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20044" title="">🚧 Work in progress / Temporary issue (20044)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20045" title="">🤔 Needs review (20045)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20046" title="">💾 Saving files / Backup (20046)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20047" title="">🍻 Cheers! / Team celebration (20047)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20048" title="">🍺 Casual drinks / Happy hour (20048)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20049" title="">🔥 Critical issue (20049)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20050" title="">⏰ Deadline approaching (20050)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20051" title="">😂 That was funny! (20051)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20052" title="">📌 Important! Please check (20052)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20053" title="">👉 Point to note (20053)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20054" title="">🔵 (Blue) Can you make this blue? (20054)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20055" title="">🔴 (Red) Please highlight this in red! (20055)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20056" title="">🟢 (Green) Can we use green for this section? (20056)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20057" title="">🟡 (Yellow) Mark this in yellow for visibility (20057)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20058" title="">🟣 (Purple) Let’s test this color variation (20058)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20059" title="">⚫ (Black) Can you darken the text? (20059)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20060" title="">⚪ (White) Add a white background here (20060)</button><span></span></div>
+        <div class="LINEBUTTONDIV"><button data-value="20061" title="">🎨 Design & Creativity (20061)</button><span></span></div>
+        </div>
+
+    <br/>
+    <div>
+    
+
+</body>
+</html>

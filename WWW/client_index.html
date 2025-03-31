@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Services</title>
+    <style>
+        body {
+            background-color: black;
+            color: #00ff00;
+            font-family: Arial, sans-serif;
+        }
+        a {
+            color: #00ff00;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hello, World!</h1>
+    
+    Page:
+    <ul>
+        <li><a href="http://raspberrypi.local:8080/client">Client Interface</a>: Interact as a default user on the server.</li>
+        <li><a href="http://raspberrypi.local:8080/services">Service State</a>: Check the state of services on the Raspberry Pi.</li>
+        <li><a href="http://raspberrypi.local:8080/ntp">NTP Check</a>: View offset between your computer and the Pi's NTP server.</li>
+     </ul>
+
+    Post: 
+    <ul>
+        <li><a href="http://raspberrypi.local:8080/ntp-offset">NTP Offset</a>: Submit a UTC timestamp (ms since 1970) to get offset.</li>
+    </ul>
+</body>
+</html>
