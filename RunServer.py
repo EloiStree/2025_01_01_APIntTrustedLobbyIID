@@ -42,10 +42,9 @@ int_max_byte_size = 16
 server_websocket_port = 4625
 server_websocket_mask= "0.0.0.0"
 
- 
-# If you want to relay the IID to a secure gate with cryto handshake
+# Relay to the gate
 broadcast_ip_gate="127.0.0.1"
-broadcast_port_gates= [3615,4625]
+broadcast_port_gates= [4615]
 
 ntp_server = "127.0.0.1"
 def get_ntp_time():
