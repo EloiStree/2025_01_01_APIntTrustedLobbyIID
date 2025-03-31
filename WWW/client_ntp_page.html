@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timestamp Offset</title>
+    <script>
+        async function getTimestampAndSend() {
+            // Get the current time in milliseconds
+            const timestamp = Date.now();
+
+            try {
+                // Send the timestamp to the /ntp route
+                const response = await fetch('/ntp-offset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ timestamp: timestamp })
+                });
+
+                // Parse the JSON response
+                const data = await response.json();
+
+                // Display the result (offset)
+                document.getElementById('result').innerText = `Offset Result: ${data.offset}`;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            getTimestampAndSend();
+        });
+    </script>
+</head>
+<body>
+    <h1>Get NTP Offset</h1>
+    <p id="result"></p>
+</body>
+</html>

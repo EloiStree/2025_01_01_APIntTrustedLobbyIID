@@ -3,39 +3,35 @@
 
 import json
 import socket
+import struct
 import time
 import traceback
-import uuid
 import os
 import asyncio
-import struct
-import requests
 import queue
 import threading
 import tornado
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
-import hashlib
-
 from typing import Dict
-
 import sys
+
 
 bool_is_in_terminal_mode= sys.stdout.isatty()
 if bool_is_in_terminal_mode:
     print("Running in a terminal.")
     stop_service_script ="""
-    sudo systemctl stop apint_trusted_lobby_iid.service
-    sudo systemctl stop apint_trusted_lobby_iid.timer
+    sudo systemctl stop apint_trusted_push_iid.service
+    sudo systemctl stop apint_trusted_push_iid.timer
     """
     # run code to stop current service
     os.system(stop_service_script)
     
     # WHEN YOU NEED TO RESTART IT.
     """
-    sudo systemctl restart apint_trusted_lobby_iid.service
-    sudo systemctl restart apint_trusted_lobby_iid.timer
+    sudo systemctl restart apint_trusted_push_iid.service
+    sudo systemctl restart apint_trusted_push_iid.timer
     """
 
 
@@ -43,7 +39,7 @@ if bool_is_in_terminal_mode:
 int_max_byte_size = 16
 
 # 4615 IS RESERVED FOR PUSH IID GATE WITH CRYPTO HANDSHAKE
-server_websocket_port = 4616
+server_websocket_port = 4625
 server_websocket_mask= "0.0.0.0"
 
  
@@ -51,8 +47,30 @@ server_websocket_mask= "0.0.0.0"
 broadcast_ip_gate="127.0.0.1"
 broadcast_port_gates= [3615,4625]
 
+ntp_server = "127.0.0.1"
+def get_ntp_time():
+    import ntplib
+    from time import ctime
+    c = ntplib.NTPClient()
+    response = c.request(ntp_server, version=3)
+    return response.tx_time
+
+def get_local_timestamp_in_ms_utc_since1970():
+        return int(time.time()*1000)
+    
+def get_ntp_time_from_local():
+    global millisecond_offset
+    return asyncio.get_event_loop().time()*1000+millisecond_offset
 
 
+ntp_timestmap = get_ntp_time()*1000
+local_timestamp = get_local_timestamp_in_ms_utc_since1970()
+millisecond_offset = ntp_timestmap-local_timestamp
+print(f"ntp_timestmap: {ntp_timestmap}")
+print(f"local_timestamp: {local_timestamp}")
+print(f"diff: {millisecond_offset}")
+
+default_user=-42
 
 class UserHandshake:
     def __init__(self):
@@ -62,7 +80,7 @@ class UserHandshake:
         self.exit_handler=False
     
     def is_connection_lost(self):
-        return self.user.exit_handler or self.user.websocket is None
+        return self.exit_handler or self.websocket is None
         
         
                 
@@ -81,8 +99,9 @@ bool_allow_text_broadcasting= False
  
 
 queue_broadcast_text_message = queue.Queue()
-queue_boardcast_byte_iid_message = queue.Queue()
-queue_boardcast_byte_message = queue.Queue()
+
+queue_broadcast_byte_iid_message = queue.Queue()
+queue_broadcast_byte_message = queue.Queue()
  
  
 async def relay_iid_message_as_local_udp_thread(byte):
@@ -118,39 +137,39 @@ async def push_text_or_close( user: UserHandshake,  b: str):
  
 bool_need_push_debug_text_bytes = False
 bool_need_push_debug_iid = False
-def push_waiting_text_message():
+async def push_waiting_text_message():
     while not queue_broadcast_text_message.empty():
         message = queue_broadcast_text_message.get()
         for user in list_of_user_connected:
-            push_text_or_close(user, message)
+            await push_text_or_close(user, message)
     
     if bool_need_push_debug_text_bytes and is_terminal_mode():
-        termnial_print(f"Pushing Text: {queue_boardcast_byte_iid_message}")
+        termnial_print(f"Pushing Text: {queue_broadcast_byte_iid_message}")
                 
-def push_waiting_byte_message():
-    while not queue_boardcast_byte_message.empty():
-        message = queue_boardcast_byte_message.get()
+async def push_waiting_byte_message():
+    while not queue_broadcast_byte_message.empty():
+        message = queue_broadcast_byte_message.get()
         for user in list_of_user_connected:
-            push_byte_or_close(user, message)
+            await push_byte_or_close(user, message)
             
     if bool_need_push_debug_text_bytes and is_terminal_mode():
-        termnial_print(f"Pushing Bytes: {len(queue_boardcast_byte_iid_message)}")
+        termnial_print(f"Pushing Bytes: {len(queue_broadcast_byte_iid_message)}")
     
-def push_waiting_byte_iid_message():
+async def push_waiting_byte_iid_message():
     
-    while not queue_boardcast_byte_iid_message.empty():
-        message = queue_boardcast_byte_iid_message.get()
+    while not queue_broadcast_byte_iid_message.empty():
+        message = queue_broadcast_byte_iid_message.get()
         relay_iid_message_as_local_udp_thread(message)
         for user in list_of_user_connected:
-            push_byte_or_close(user, message)
+            await push_byte_or_close(user, message)
                 
     if bool_need_push_debug_iid and is_terminal_mode():
-        termnial_print(f"Pushing IID: {queue_boardcast_byte_iid_message}")
+        termnial_print(f"Pushing IID: {queue_broadcast_byte_iid_message}")
                 
-def push_waiting_message():
-    push_waiting_byte_iid_message()
-    push_waiting_byte_message()
-    push_waiting_text_message()
+async def push_waiting_message():
+    await push_waiting_byte_iid_message()
+    await push_waiting_byte_message()
+    await push_waiting_text_message()
  
  
 def is_terminal_mode():
@@ -226,15 +245,41 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             return self.user.exit_handler or self.user.websocket is None
             
 
+
         async def on_message(self, message):
+            global queue_broadcast_byte_message
+            global queue_broadcast_byte_iid_message
+            global queue_broadcast_text_message
+            
             if isinstance(message, str):                    
                 queue_broadcast_text_message.put(message)
             else:
-                lenght_message = len(message)
-                if lenght_message== 4 or lenght_message== 8 or lenght_message== 12 or lenght_message== 16:
-                    queue_boardcast_byte_iid_message.put(message)
+                message_length = len(message)
+                # Cast message to bytes
+                bytes_to_stack = bytes(message)
+
+                if message_length in {4, 8, 12, 16}:
+                    if message_length == 4:
+                        int_value = struct.unpack('<i', bytes_to_stack)[0]
+                        bytes_to_stack = struct.pack('<iiQ', default_user, int_value, get_local_timestamp_in_ms_utc_since1970())
+                        queue_broadcast_byte_iid_message.put(bytes_to_stack)
+
+                    elif message_length == 8:
+                        int_index, int_value = struct.unpack('<ii', bytes_to_stack)
+                        bytes_to_stack = struct.pack('<iiQ', int_index, int_value, get_local_timestamp_in_ms_utc_since1970())
+                        queue_broadcast_byte_iid_message.put(bytes_to_stack)
+
+                    elif message_length == 12:
+                        int_value, date = struct.unpack('<iQ', bytes_to_stack)
+                        bytes_to_stack = struct.pack('<iiQ', default_user, int_value, date)
+                        queue_broadcast_byte_iid_message.put(bytes_to_stack)
+
+                    elif message_length == 16:
+                        queue_broadcast_byte_iid_message.put(bytes_to_stack)
+
                 else:
-                    queue_boardcast_byte_message.put(message)
+                    queue_broadcast_byte_message.put(message)
+
 
         def on_close(self):
             print("WebSocket closed")
@@ -268,12 +313,19 @@ def loop_udp_server():
         time.sleep(2)
 
 def print_local_ip():
-    
     print("IPv4")
     hostname = socket.gethostname()
-    local_ip = socket.gethostbyname(hostname)
     print(f"Hostname: {hostname}")
-    print(f"Local IP: {local_ip}")
+    
+    output = os.popen("hostname -I").read().strip()
+    hostname = output
+    ip_addresses = output.split()
+    stack=""
+    for ip in ip_addresses:
+        if "." in ip:  
+            stack+= ip+"\n"
+    hostname_ip=stack
+    print (f"Local IP: {hostname_ip}")
     
 
 if __name__ == "__main__":
