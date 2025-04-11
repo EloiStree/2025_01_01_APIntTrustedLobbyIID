@@ -64,7 +64,7 @@ sudo systemctl status apint_trusted_push_iid.timer
 
 
 ```
-pip install requests tornado --break-system-packages
+pip install requests tornado ntplib --break-system-packages
 ```
 
 ```
