@@ -20,6 +20,7 @@ import sys
 
 bool_is_in_terminal_mode= sys.stdout.isatty()
 if bool_is_in_terminal_mode:
+    
     print("Running in a terminal.")
     stop_service_script ="""
     sudo systemctl stop apint_trusted_push_iid.service
@@ -47,6 +48,9 @@ broadcast_ip_gate="127.0.0.1"
 broadcast_port_gates= [4615]
 
 ntp_server = "127.0.0.1"
+
+
+
 def get_ntp_time():
     import ntplib
     from time import ctime
@@ -61,11 +65,20 @@ def get_ntp_time_from_local():
     global millisecond_offset
     return asyncio.get_event_loop().time()*1000+millisecond_offset
 
-
-ntp_timestmap = get_ntp_time()*1000
+bool_has_npt_server = False
+try:
+    ntp_timestamp = get_ntp_time()*1000
+    bool_has_npt_server = True
+except:
+    print("IMPOSSIBLE TO CONNECT AT NTP")
 local_timestamp = get_local_timestamp_in_ms_utc_since1970()
-millisecond_offset = ntp_timestmap-local_timestamp
-print(f"ntp_timestmap: {ntp_timestmap}")
+if bool_has_npt_server:
+    print(f"NTP: {ntp_timestamp}")
+else:
+    ntp_timestamp = local_timestamp
+
+millisecond_offset = ntp_timestamp-local_timestamp
+print(f"ntp_timestmap: {ntp_timestamp}")
 print(f"local_timestamp: {local_timestamp}")
 print(f"diff: {millisecond_offset}")
 
