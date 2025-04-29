@@ -73,3 +73,80 @@ sudo systemctl stop apint_trusted_push_iid.service
 sudo systemctl stop apint_trusted_push_iid.timer
 python /git/apint_trusted_push_iid/RunServer.py
 ```
+
+
+
+------------------
+
+
+Version WSS DDNS  Go in branche
+
+
+
+
+
+```
+
+git clone https://github.com/EloiStree/2025_01_01_TrustedServerAPIntIID.git /git/apint_trusted_push_iid_wss_ddns
+cd /etc/systemd/system/
+sudo nano apint_trusted_push_iid_wss_ddns.service
+sudo nano apint_trusted_push_iid_wss_ddns.timer
+```
+```
+[Unit]
+Description=APIntIO Trusted Push IID Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /git/apint_trusted_push_iid_wss_ddns/RunServer.py
+Restart=always
+User=root
+WorkingDirectory=/git/apint_trusted_push_iid_wss_ddns
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```
+[Unit]
+Description=APIntIO Push IID Timer
+
+[Timer]
+OnBootSec=0min
+OnUnitActiveSec=10s
+
+[Install]
+WantedBy=timers.target
+```
+
+```
+cd /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable apint_trusted_push_iid_wss_ddns.service
+chmod +x /git/apint_trusted_push_iid_wss_ddns/RunServer.py
+sudo systemctl restart apint_trusted_push_iid_wss_ddns.service
+
+sudo systemctl enable apint_trusted_push_iid_wss_ddns.timer
+sudo systemctl start apint_trusted_push_iid_wss_ddns.timer
+sudo systemctl list-timers | grep apint_trusted_push_iid_wss_ddns
+
+sudo systemctl restart apint_trusted_push_iid_wss_ddns.service
+sudo systemctl restart apint_trusted_push_iid_wss_ddns.timer
+
+
+sudo systemctl status apint_trusted_push_iid_wss_ddns.service
+sudo systemctl status apint_trusted_push_iid_wss_ddns.timer
+```
+
+
+```
+pip install requests tornado ntplib --break-system-packages
+```
+
+```
+
+sudo systemctl stop apint_trusted_push_iid_wss_ddns.service
+sudo systemctl stop apint_trusted_push_iid_wss_ddns.timer
+python /git/apint_trusted_push_iid_wss_ddns/RunServer.py
+```
