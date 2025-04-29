@@ -1,8 +1,78 @@
 
-# Websocket: ws://raspberrypi.local:4616
+# Websocket: wss://raspberrypi.local:4617
+
+
+# openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
+# -subj "/CN=193.150.14.47"
+#SSL Error on 12 ('85.190.85.165', 57992): [SSL: SSLV3_ALERT_CERTIFICATE_UNKNOWN] sslv3 alert certificate unknown (_ssl.c:992)
+
+"""
+
+CERT BOT IS SUFFICIENT FOR THE SSL CERTIFICAT
+BUT I DONT KNOW IF THE RESTE WAS NEEDED
+
+sudo apt update
+sudo apt install certbot
+sudo certbot certonly --standalone -d apint.ddns.net
+
+This will create certificates in /etc/letsencrypt/live/apint.ddns.net/
+To use these certificates in your Python code, you can load them using the ssl module:
+ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+ssl_ctx.load_cert_chain(
+    "/etc/letsencrypt/live/apint.ddns.net/fullchain.pem",
+    "/etc/letsencrypt/live/apint.ddns.net/privkey.pem"
+)
+
+To renew the certificate automatically, you can set up a cron job. Open the crontab file with:
+sudo crontab -e
+0 2 * * * certbot renew --quiet
+
+Apparently;
+❌ You CANNOT Use a Let’s Encrypt Certificate for the IP Address
+✅ wss://apint.ddns.net:4725/ — will work securely with a Let's Encrypt certificate.
+❌ wss://193.150.14.47:4725/ — will fail in browsers with a certificate error, because the certificate is not valid for the IP.
+
+
+
+
+cd /token/
+
+# Step 1: Create OpenSSL config with SANs for both IP and domain
+cat > san_full.cnf <<EOF
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+x509_extensions = v3_req
+
+[dn]
+C=BE
+ST=LIEGE
+L=LIEGE
+O=DEVELOPER
+OU=ELOISTREE
+CN=apint.ddns.net
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = apint.ddns.net
+IP.1 = 193.150.14.47
+EOF
+
+# Step 2: Generate the certificate with SANs
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+-keyout ssl_key.pem -out ssl_cert.pem \
+-config san_full.cnf -extensions v3_req
+
+"""
+
 
 import json
 import socket
+import ssl
 import struct
 import time
 import traceback
@@ -37,10 +107,33 @@ if bool_is_in_terminal_mode:
 
 
 
+
+
+
+
+# openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out cert.pem
+path_ssh_certificat="/token/ssl_cert.pem"
+path_ssh_private_key="/token/ssl_key.pem"
+
+
+
+# read and display part of the certificat for debug
+with open(path_ssh_certificat, "r") as file:
+    data = file.read()
+    print("Certificat SSL:")
+    print(data[:50])
+
+# read and display part of the private key for debug
+with open(path_ssh_private_key, "r") as file:
+    data = file.read()
+    print("Private Key SSL:")
+    print(data[:50])
+
+
 int_max_byte_size = 16
 
 # 4615 IS RESERVED FOR PUSH IID GATE WITH CRYPTO HANDSHAKE
-server_websocket_port = 4625
+server_websocket_port = 4725
 server_websocket_mask= "0.0.0.0"
 
 # Relay to the gate
@@ -351,16 +444,27 @@ if __name__ == "__main__":
 
     while True:
         try:
-            app = make_app()
-            app.listen(server_websocket_port)  
-            print(f"Server started on ws://{server_websocket_mask}:{server_websocket_port}/")
+            print(f"Server started on wss://{server_websocket_mask}:{server_websocket_port}/")
+            ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_ctx.load_cert_chain(
+                "/etc/letsencrypt/live/apint.ddns.net/fullchain.pem",
+                "/etc/letsencrypt/live/apint.ddns.net/privkey.pem"
+            )
+
+            app = tornado.web.Application([
+                (r"/", WebSocketHandler),
+            ])
+
+            server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
+            server.listen(4725)  # Match your intended port
+
+            print("Running wss://apint.ddns.net:4725/")
             tornado.ioloop.IOLoop.current().start()
+
         except Exception as e:
-            print (f"SERVER TORANDO CRASHED: {e}")
+            print(f"SERVER TORNADO CRASHED: {e}")
             traceback.print_exc()
         time.sleep(2)
-        
-    
-    
+            
 
 
