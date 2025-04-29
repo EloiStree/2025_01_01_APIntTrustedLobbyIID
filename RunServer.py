@@ -22,7 +22,7 @@ ssl_ctx.load_cert_chain(
     "/etc/letsencrypt/live/apint.ddns.net/fullchain.pem",
     "/etc/letsencrypt/live/apint.ddns.net/privkey.pem"
 )
-
+ 
 To renew the certificate automatically, you can set up a cron job. Open the crontab file with:
 sudo crontab -e
 0 2 * * * certbot renew --quiet
@@ -31,7 +31,7 @@ Apparently;
 ❌ You CANNOT Use a Let’s Encrypt Certificate for the IP Address
 ✅ wss://apint.ddns.net:4725/ — will work securely with a Let's Encrypt certificate.
 ❌ wss://193.150.14.47:4725/ — will fail in browsers with a certificate error, because the certificate is not valid for the IP.
-
+https://chatgpt.com/share/68113cb1-15b4-800e-b8ad-3b272e5dcc5d
 
 
 
