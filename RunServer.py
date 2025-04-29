@@ -88,7 +88,12 @@ from typing import Dict
 import sys
 
 
+
+
+
 bool_use_wss = True
+
+
 # IF YOU ARE ON HOSTED PI WITH DDNS IN WSS
 ddns_server= "apint.ddns.net"
 ddns_server_ip = socket.gethostbyname(ddns_server)
@@ -98,6 +103,12 @@ server_websocket_port_wss = 4725
 server_websocket_port_ws = 4625
 server_websocket_mask= "0.0.0.0"
 
+
+# Check in given params if there is --wss or --ws
+if any(arg == "--wss" for arg in sys.argv):
+    bool_use_wss = True
+if any(arg == "--ws" for arg in sys.argv):
+    bool_use_wss = False
 
 bool_is_in_terminal_mode= sys.stdout.isatty()
 if bool_is_in_terminal_mode:
