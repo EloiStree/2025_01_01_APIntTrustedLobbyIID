@@ -88,6 +88,17 @@ from typing import Dict
 import sys
 
 
+bool_use_wss = True
+# IF YOU ARE ON HOSTED PI WITH DDNS IN WSS
+ddns_server= "apint.ddns.net"
+ddns_server_ip = socket.gethostbyname(ddns_server)
+server_websocket_port_wss = 4725
+
+# IF YOU ARE ON LOCAL PI  with no DDNS
+server_websocket_port_ws = 4625
+server_websocket_mask= "0.0.0.0"
+
+
 bool_is_in_terminal_mode= sys.stdout.isatty()
 if bool_is_in_terminal_mode:
     
@@ -107,34 +118,68 @@ if bool_is_in_terminal_mode:
 
 
 
+def genere_certbot_certificat(ddns_server): 
+    
+    string_path_certificat = f"/etc/letsencrypt/live/{ddns_server}/fullchain.pem"
+    string_path_private_key = f"/etc/letsencrypt/live/{ddns_server}/privkey.pem"
+
+    if os.path.exists(string_path_certificat) and os.path.exists(string_path_private_key):  
+        print("Certificat already exist")
+        print(f"/etc/letsencrypt/live/{ddns_server}/fullchain.pem")
+        print(f"/etc/letsencrypt/live/{ddns_server}/privkey.pem")
+        print("If you want to regenerate it:") 
+        print("sudo certbot renew --quiet")
+        return
+    print("Certificat not exist, generate it")
+    """
+    sudo apt update
+    sudo apt install certbot
+    sudo certbot certonly --standalone -d apint.ddns.net
+    """
+    
+    # Generate the certificate using certbot
+    os.system(f"sudo certbot certonly --standalone -d {ddns_server}")
+    # Check if the certificate was generated successfully
+    if os.path.exists(string_path_certificat) and os.path.exists(string_path_private_key):
+        print("Certificat generated")
+    else:
+        print("Certificat not generated")
+    
+
+    print("FILE CERTIFICAT")
+    print(f"/etc/letsencrypt/live/{ddns_server}/fullchain.pem")
+    print(f"/etc/letsencrypt/live/{ddns_server}/privkey.pem")
+
+    print("You can write in cron job to renew the certificat")
+    print("0 2 * * * certbot renew --quiet")
+    print("or run it manually")
+    print("sudo certbot renew --quiet")
 
 
 
 
-# openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out cert.pem
-path_ssh_certificat="/token/ssl_cert.pem"
-path_ssh_private_key="/token/ssl_key.pem"
+
+
+# # openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out cert.pem
+# path_ssh_certificat="/token/ssl_cert.pem"
+# path_ssh_private_key="/token/ssl_key.pem"
 
 
 
-# read and display part of the certificat for debug
-with open(path_ssh_certificat, "r") as file:
-    data = file.read()
-    print("Certificat SSL:")
-    print(data[:50])
+# # read and display part of the certificat for debug
+# with open(path_ssh_certificat, "r") as file:
+#     data = file.read()
+#     print("Certificat SSL:")
+#     print(data[:50])
 
-# read and display part of the private key for debug
-with open(path_ssh_private_key, "r") as file:
-    data = file.read()
-    print("Private Key SSL:")
-    print(data[:50])
+# # read and display part of the private key for debug
+# with open(path_ssh_private_key, "r") as file:
+#     data = file.read()
+#     print("Private Key SSL:")
+#     print(data[:50])
 
 
 int_max_byte_size = 16
-
-# 4615 IS RESERVED FOR PUSH IID GATE WITH CRYPTO HANDSHAKE
-server_websocket_port = 4725
-server_websocket_mask= "0.0.0.0"
 
 # Relay to the gate
 broadcast_ip_gate="127.0.0.1"
@@ -212,10 +257,15 @@ queue_broadcast_byte_message = queue.Queue()
 async def relay_iid_message_as_local_udp_thread(byte):
     print(f"Relay UDP {byte}")
     for port in broadcast_port_gates:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(byte, (broadcast_ip_gate, port))
-        sock.close()
-        
+        loop = asyncio.get_event_loop()
+        transport, _ = await loop.create_datagram_endpoint(
+            lambda: asyncio.DatagramProtocol(),
+            remote_addr=(broadcast_ip_gate, port)
+        )
+        try:
+            transport.sendto(byte)
+        finally:
+            transport.close()
 
 async def push_byte_or_close( user: UserHandshake,  b: bytes):
     if user is None or user.is_connection_lost():
@@ -264,7 +314,7 @@ async def push_waiting_byte_iid_message():
     
     while not queue_broadcast_byte_iid_message.empty():
         message = queue_broadcast_byte_iid_message.get()
-        relay_iid_message_as_local_udp_thread(message)
+        await relay_iid_message_as_local_udp_thread(message)
         for user in list_of_user_connected:
             await push_byte_or_close(user, message)
                 
@@ -441,25 +491,39 @@ if __name__ == "__main__":
     server_thread.daemon = True 
     server_thread.start()
     
-
     while True:
         try:
-            print(f"Server started on wss://{server_websocket_mask}:{server_websocket_port}/")
-            ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            ssl_ctx.load_cert_chain(
-                "/etc/letsencrypt/live/apint.ddns.net/fullchain.pem",
-                "/etc/letsencrypt/live/apint.ddns.net/privkey.pem"
-            )
+            port = server_websocket_port_ws 
+            if bool_use_wss:
+                port = server_websocket_port_wss
+                print(f"Server started on wss://{server_websocket_mask}:{server_websocket_port_wss}/")
+            else:
+                print(f"Server started on ws://{server_websocket_mask}:{server_websocket_port_ws}/")
+            
+            if bool_use_wss:
 
-            app = tornado.web.Application([
-                (r"/", WebSocketHandler),
-            ])
+                genere_certbot_certificat(ddns_server)
+                print("Using WSS with SSL certificate")
+                ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                ssl_ctx.load_cert_chain(
+                    f"/etc/letsencrypt/live/{ddns_server}/fullchain.pem",
+                    f"/etc/letsencrypt/live/{ddns_server}/privkey.pem"
+                )
 
-            server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
-            server.listen(4725)  # Match your intended port
+                app = tornado.web.Application([
+                    (r"/", WebSocketHandler),
+                ])
 
-            print("Running wss://apint.ddns.net:4725/")
-            tornado.ioloop.IOLoop.current().start()
+                server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
+                server.listen(port)  # Match your intended port
+
+                print(f"Running wss://{ddns_server}:4725/")
+                tornado.ioloop.IOLoop.current().start()
+            else:
+                app = make_app()
+                app.listen(port)
+                print(f"Running ws://{server_websocket_mask}:{port}/")
+                tornado.ioloop.IOLoop.current().start()
 
         except Exception as e:
             print(f"SERVER TORNADO CRASHED: {e}")
