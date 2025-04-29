@@ -87,7 +87,7 @@ Version WSS DDNS  Go in branche
 
 ```
 
-git clone https://github.com/EloiStree/2025_01_01_TrustedServerAPIntIID.git /git/apint_trusted_push_iid_wss_ddns
+git clone https://github.com/EloiStree/2025_01_01_TrustedServerAPIntIID.git#wss_version  /git/apint_trusted_push_iid_wss_ddns
 cd /etc/systemd/system/
 sudo nano apint_trusted_push_iid_wss_ddns.service
 sudo nano apint_trusted_push_iid_wss_ddns.timer
