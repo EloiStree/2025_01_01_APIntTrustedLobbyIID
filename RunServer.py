@@ -96,6 +96,7 @@ import sys
 bool_use_wss = True
 
 
+bool_is_in_terminal_mode=False
 # IF YOU ARE ON HOSTED PI WITH DDNS IN WSS
 ddns_server= "apint.ddns.net"
 ddns_server_ip = socket.gethostbyname(ddns_server)
@@ -112,23 +113,21 @@ if any(arg == "--wss" for arg in sys.argv):
 if any(arg == "--ws" for arg in sys.argv):
     bool_use_wss = False
 
-bool_is_in_terminal_mode= sys.stdout.isatty()
-if bool_is_in_terminal_mode:
-    
-    print("Running in a terminal.")
-    stop_service_script ="""
-    sudo systemctl stop apint_trusted_push_iid.service
-    sudo systemctl stop apint_trusted_push_iid.timer
-    """
-    # run code to stop current service
-    os.system(stop_service_script)
-    
-    # WHEN YOU NEED TO RESTART IT.
-    """
-    sudo systemctl restart apint_trusted_push_iid.service
-    sudo systemctl restart apint_trusted_push_iid.timer
-    """
+# bool_is_in_terminal_mode = sys.stdout.isatty()
+# if bool_is_in_terminal_mode and "PYCHARM_HOSTED" not in os.environ:
+#     print("Running in a terminal.")
+#     stop_service_script = """
+#     sudo systemctl stop apint_trusted_push_iid_wss_ddns.service
+#     sudo systemctl stop apint_trusted_push_iid_wss_ddns.timer
+#     """
+#     # Run code to stop current service
+#     os.system(stop_service_script)
 
+#     # WHEN YOU NEED TO RESTART IT.
+#     """
+#     sudo systemctl restart apint_trusted_push_iid_wss_ddns.service
+#     sudo systemctl restart apint_trusted_push_iid_wss_ddns.timer
+#     """
 
 
 def genere_certbot_certificat(ddns_server): 
@@ -338,7 +337,6 @@ async def push_waiting_message():
     await push_waiting_byte_iid_message()
     await push_waiting_byte_message()
     await push_waiting_text_message()
- 
  
 def is_terminal_mode():
     return bool_is_in_terminal_mode
