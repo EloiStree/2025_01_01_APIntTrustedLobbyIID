@@ -93,6 +93,7 @@ import sys
 
 
 
+bool_display_received_for_debug = False
 bool_use_wss = True
 
 
@@ -113,6 +114,8 @@ if any(arg == "--wss" for arg in sys.argv):
 if any(arg == "--ws" for arg in sys.argv):
     bool_use_wss = False
 
+
+
 # bool_is_in_terminal_mode = sys.stdout.isatty()
 # if bool_is_in_terminal_mode and "PYCHARM_HOSTED" not in os.environ:
 #     print("Running in a terminal.")
@@ -127,7 +130,9 @@ if any(arg == "--ws" for arg in sys.argv):
 #     """
 #     sudo systemctl restart apint_trusted_push_iid_wss_ddns.service
 #     sudo systemctl restart apint_trusted_push_iid_wss_ddns.timer
-#     """
+#     sudo systemctl stop apint_trusted_push_iid_wss_ddns.service
+#     sudo systemctl stop apint_trusted_push_iid_wss_ddns.timer
+# #     """
 
 
 def genere_certbot_certificat(ddns_server): 
@@ -267,7 +272,9 @@ queue_broadcast_byte_message = queue.Queue()
  
  
 async def relay_iid_message_as_local_udp_thread(byte):
-    print(f"Relay UDP {byte}")
+
+    if bool_need_push_debug_text_bytes:
+        print(f"Relay UDP {byte}")
     for port in broadcast_port_gates:
         loop = asyncio.get_event_loop()
         transport, _ = await loop.create_datagram_endpoint(
@@ -372,7 +379,6 @@ def remove_of_list_close_websocket():
         if user.is_connection_lost():
             remove_user_from_connected(user)
 
-
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
         async def open(self):
             print("WebSocket opened")
@@ -417,6 +423,12 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             global queue_broadcast_byte_iid_message
             global queue_broadcast_text_message
             
+            if bool_display_received_for_debug:
+                print(f"Received message: {message}")
+                if isinstance(message, str):
+                    print(f"Received text message: {message}")
+                else:
+                    print(f"Received binary message: {message}")
             if isinstance(message, str):                    
                 queue_broadcast_text_message.put(message)
             else:
